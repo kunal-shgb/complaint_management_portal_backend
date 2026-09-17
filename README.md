@@ -1,16 +1,18 @@
-# Bank Complaint Management Portal
+# Complaint Management Portal
 
 ## 1. Overview
 
-The **Bank Complaint Management Portal** is an internal complaint management system designed to receive, track, assign, monitor, and resolve customer complaints submitted through the Bank's official website.
+The **Complaint Management Portal** is an internal complaint management system designed to receive, track, assign, monitor, escalate, and resolve customer complaints submitted through the Bank's official website.
 
 Customers will lodge complaints through the Bank's website. The complaint data will be captured centrally and made available to authorized Bank officials through the Complaint Management Portal for further processing and resolution.
 
 The system will provide an end-to-end complaint lifecycle, starting from **complaint registration** and continuing through **assignment, investigation, resolution, customer communication, escalation, and closure**.
 
+The Complaint Management Portal will **not maintain its own authentication or authorization mechanism**. Authentication and authorization of Bank employees/users will be handled through the Bank's existing **User Management / Identity and Access Management (IAM) system**, exposed through secure APIs.
+
 ---
 
-## 2. Objectives
+# 2. Objectives
 
 The primary objectives of the portal are:
 
@@ -26,12 +28,332 @@ The primary objectives of the portal are:
 * Provide management with MIS and complaint-monitoring dashboards.
 * Improve transparency and accountability in complaint resolution.
 * Maintain records required for compliance, audit, and regulatory purposes.
+* Integrate with the Bank's existing User Management / IAM system for employee authentication and authorization.
 
 ---
 
-# 3. Complaint Lifecycle
+# 3. Technology Stack
 
-The proposed complaint lifecycle is:
+## Backend
+
+```text
+.NET 10 (LTS)
+C#
+ASP.NET Core Web API
+Entity Framework Core
+```
+
+## Frontend
+
+```text
+Next.js
+React
+TypeScript
+```
+
+## Database
+
+```text
+PostgreSQL
+```
+
+## Cache / Background Processing
+
+```text
+Redis
+.NET Background Services
+```
+
+## Containerization
+
+```text
+Docker
+Docker Compose
+```
+
+## Reverse Proxy
+
+```text
+Nginx
+```
+
+## Authentication & Authorization
+
+```text
+Bank's Existing User Management / IAM System
+```
+
+> The Complaint Management Portal will not maintain its own employee authentication system or password database.
+
+---
+
+# 4. High-Level Architecture
+
+```text
+                         CUSTOMER
+                            │
+                            ▼
+                   ┌─────────────────┐
+                   │  Bank Website   │
+                   │ Complaint Form  │
+                   └────────┬────────┘
+                            │
+                         HTTPS
+                            │
+                            ▼
+                   ┌─────────────────┐
+                   │   ASP.NET Core  │
+                   │    Web API      │
+                   │    .NET 10      │
+                   └────────┬────────┘
+                            │
+             ┌──────────────┼──────────────┐
+             ▼              ▼              ▼
+        PostgreSQL        Redis       File Storage
+             │
+             │
+             ▼
+    ┌────────────────────────┐
+    │ Complaint Management   │
+    │        Portal          │
+    │       Next.js          │
+    └────────────┬───────────┘
+                 │
+                 │ Authentication /
+                 │ User Information
+                 ▼
+    ┌────────────────────────┐
+    │ Bank User Management / │
+    │          IAM           │
+    └────────────────────────┘
+```
+
+---
+
+# 5. Authentication and Authorization
+
+## 5.1 External User Management
+
+The Complaint Management Portal will **not create or maintain employee user accounts**.
+
+The following functions will remain with the Bank's existing User Management / IAM system:
+
+* User authentication
+* Username/password validation
+* MFA/OTP, if applicable
+* User identity
+* User status
+* Enterprise roles
+* Department information
+* Region/office information
+* Branch information
+* Authorization-related attributes
+
+The Complaint Portal will consume the required information through secure APIs/token-based integration.
+
+---
+
+# 6. Authentication Flow
+
+A typical flow will be:
+
+```text
+Bank Official
+      │
+      ▼
+Complaint Portal
+      │
+      ▼
+Bank User Management / IAM
+      │
+      ▼
+User Authentication
+      │
+      ▼
+Authentication Token
+      │
+      ▼
+ASP.NET Core API
+      │
+      ▼
+Token Validation
+      │
+      ▼
+Authorization
+      │
+      ▼
+Complaint Data
+```
+
+The exact authentication protocol will depend upon the Bank's existing User Management API.
+
+Possible mechanisms include:
+
+* OAuth 2.0
+* OpenID Connect
+* SAML
+* JWT
+* Bank-specific authentication API
+
+The implementation should follow the Bank's approved IAM integration specification.
+
+---
+
+# 7. ASP.NET Core Authorization
+
+The backend will use **ASP.NET Core's built-in authentication and authorization middleware** to protect APIs.
+
+Conceptually:
+
+```text
+Request
+   │
+   ▼
+Authentication Middleware
+   │
+   ▼
+Validate Bank IAM Token
+   │
+   ▼
+User Claims
+   │
+   ▼
+Authorization Middleware
+   │
+   ├── Role
+   ├── Employee ID
+   ├── Department
+   ├── Region
+   └── Branch
+   │
+   ▼
+Controller / API Endpoint
+```
+
+The application should use claims received from the Bank IAM wherever possible.
+
+Example claims:
+
+```text
+EmployeeId
+Name
+Email
+Role
+Department
+Region
+Branch
+Designation
+```
+
+---
+
+# 8. Authorization Model
+
+Authorization will operate at two levels.
+
+### Level 1 — Bank IAM
+
+Responsible for:
+
+* Employee authentication
+* Employee identity
+* Enterprise roles
+* User activation/deactivation
+* Authentication lifecycle
+
+### Level 2 — Complaint Portal
+
+Responsible for:
+
+* Complaint-specific permissions
+* Complaint visibility
+* HO/RO/Branch access
+* Assignment permissions
+* Status change permissions
+* Escalation permissions
+* Report access
+
+```text
+                 Bank IAM
+                    │
+             Identity + Claims
+                    │
+                    ▼
+            ASP.NET Core API
+                    │
+            Application Policy
+                    │
+       ┌────────────┼────────────┐
+       ▼            ▼            ▼
+     Branch         RO           HO
+     Access       Access       Access
+```
+
+---
+
+# 9. User Roles
+
+Suggested logical application roles:
+
+| Role                 | Access                        |
+| -------------------- | ----------------------------- |
+| Super Admin          | System configuration          |
+| HO Admin             | Manage complaints at HO level |
+| HO Department User   | Process department complaints |
+| Regional Office User | Process RO complaints         |
+| Branch User          | Process branch complaints     |
+| Nodal Officer        | Monitoring and escalation     |
+| Management           | Dashboard and MIS             |
+| Auditor              | Read-only access              |
+
+These roles may be mapped from the roles/claims supplied by the Bank IAM.
+
+---
+
+# 10. No Local Authentication Database
+
+The Complaint Portal will **not maintain**:
+
+```text
+Username
+Password
+Password Hash
+OTP
+MFA Secret
+Security Questions
+Authentication Credentials
+```
+
+The portal may maintain application-specific mappings where required.
+
+For example:
+
+```text
+IAM Role
+    │
+    ▼
+Application Role
+    │
+    ▼
+Complaint Permission
+```
+
+Example database table:
+
+```text
+application_role_mapping
+
+id
+iam_role
+application_role
+is_active
+created_at
+updated_at
+```
+
+---
+
+# 11. Complaint Lifecycle
 
 ```text
 Customer
@@ -43,16 +365,16 @@ Complaint Lodged
 Unique Complaint Number Generated
    │
    ▼
-Complaint Received in Portal
+Complaint Received
    │
    ▼
 Categorisation / Validation
    │
    ▼
-Assignment to Concerned Office / Department
+Assignment
    │
    ▼
-Complaint Investigation
+Investigation
    │
    ▼
 Action / Resolution
@@ -67,145 +389,78 @@ Customer Feedback
 Closure
 ```
 
-If the complaint is not resolved within the prescribed timeline:
+If the complaint exceeds its prescribed TAT:
 
 ```text
-Pending Complaint
-       │
-       ▼
-Reminder / Escalation
-       │
-       ▼
-Higher Authority / Nodal Officer
-       │
-       ▼
-Further Action
+Pending
+   │
+   ▼
+SLA Warning
+   │
+   ▼
+Overdue
+   │
+   ▼
+Escalation
+   │
+   ▼
+Higher Authority
 ```
 
 ---
 
-# 4. Major Components
+# 12. Customer Complaint Module
 
-The system will consist of the following major components:
+The customer-facing complaint form will be integrated with the Bank's website.
 
-### 4.1 Customer Complaint Module
-
-This module will be integrated with the Bank's website and will allow customers to lodge complaints.
-
-Customers may be required to provide:
+Possible fields:
 
 * Customer Name
 * Mobile Number
 * Email ID
-* Customer ID / Account Number, wherever applicable
+* Customer ID
+* Account Number, wherever applicable
 * Branch
 * Complaint Category
 * Complaint Sub-category
-* Transaction Details, wherever applicable
+* Transaction ID
 * Transaction Date
 * Transaction Amount
 * Complaint Description
 * Supporting Documents
 * Preferred Communication Channel
 
-After successful submission, the system will generate a **unique Complaint Reference Number**.
+On successful submission, the system will generate a unique complaint number.
+
+Example:
+
+```text
+HGB-2026-00001245
+```
 
 ---
 
-### 4.2 Complaint Tracking
+# 13. Complaint Tracking
 
-Customers should be able to track their complaint using:
+Customers should be able to track complaints using:
 
 * Complaint Reference Number
-* Registered Mobile Number / Email
-* OTP-based verification
+* Registered Mobile Number
+* OTP verification
 
 The customer should be able to view:
 
-* Complaint Status
-* Complaint Registration Date
-* Assigned Office / Department, where appropriate
-* Last Action Taken
-* Response / Resolution
-* Closure Date
+* Complaint status
+* Registration date
+* Last action taken
+* Response/resolution
+* Closure date
 
-Sensitive internal information should not be exposed to customers.
-
----
-
-### 4.3 Complaint Management Dashboard
-
-Authorized Bank officials will have access to a dashboard showing complaints based on their role and access level.
-
-Dashboard indicators may include:
-
-* Total Complaints
-* New Complaints
-* Assigned Complaints
-* Pending Complaints
-* Complaints Under Process
-* Resolved Complaints
-* Closed Complaints
-* Reopened Complaints
-* Escalated Complaints
-* Overdue Complaints
-* Complaints Due Today
-* Complaints Due in Next Few Days
-
-Example:
-
-```text
-┌────────────────────────────────────────────────────┐
-│              COMPLAINT MANAGEMENT                  │
-├────────────┬────────────┬────────────┬──────────────┤
-│   TOTAL    │    NEW     │  PENDING   │   OVERDUE    │
-│    1,245   │     86     │    312     │      27      │
-├────────────┼────────────┼────────────┼──────────────┤
-│  RESOLVED  │   CLOSED   │ ESCALATED  │   REOPENED   │
-│     720    │     650    │     41     │       9      │
-└────────────┴────────────┴────────────┴──────────────┘
-```
+Internal remarks, employee details and sensitive information must not be exposed.
 
 ---
 
-# 5. User Roles
-
-The portal should implement **Role-Based Access Control (RBAC)**.
-
-### Suggested Roles
-
-| Role                 | Access                                             |
-| -------------------- | -------------------------------------------------- |
-| Super Admin          | Complete system administration                     |
-| HO Admin             | Manage complaints at Head Office level             |
-| HO Department User   | View and process complaints assigned to department |
-| Regional Office User | Manage complaints assigned to RO                   |
-| Branch User          | Manage complaints assigned to branch               |
-| Nodal Officer        | Monitor/escalate complaints                        |
-| Management           | Dashboard, MIS and monitoring                      |
-| Auditor              | Read-only access and audit records                 |
-
-Users should only be able to access complaints permitted by their role and organizational hierarchy.
-
-Example:
-
-```text
-Super Admin
-     │
-     └── Head Office
-           │
-           ├── Department
-           │
-           └── Regional Office
-                  │
-                  └── Branch
-```
-
----
-
-# 6. Complaint Categories
-
-Complaint categories should be configurable from the Admin Panel.
+# 14. Complaint Categories
 
 Suggested categories:
 
@@ -246,103 +501,39 @@ Suggested categories:
 * Fraud / Suspected Fraud
 * Other
 
-Categories and sub-categories should be configurable without requiring changes to the application code.
+Categories and sub-categories should be configurable.
 
 ---
 
-# 7. Complaint Status
+# 15. Complaint Status
 
-The following statuses may be maintained:
+Suggested statuses:
 
 ```text
 NEW
- │
- ▼
 RECEIVED
- │
- ▼
 ASSIGNED
- │
- ▼
 UNDER_PROCESS
- │
- ├──────────────► ESCALATED
- │
- ▼
+ESCALATED
 RESOLVED
- │
- ▼
 CUSTOMER_RESPONSE
- │
- ▼
 CLOSED
+REOPENED
+REJECTED
+DUPLICATE
+WITHDRAWN
+TRANSFERRED
 ```
 
-Additional statuses:
-
-* Reopened
-* Rejected
-* Duplicate
-* Withdrawn
-* Transferred
-
-The final list should be configurable according to the Bank's complaint-handling policy.
+The final workflow should be configurable according to Bank policy.
 
 ---
 
-# 8. Complaint Details
+# 16. Complaint Assignment
 
-Each complaint should have a detailed complaint screen.
+Complaints can be assigned based on:
 
-Example:
-
-```text
-------------------------------------------------------
-Complaint No.: HGB-2026-00001245
-------------------------------------------------------
-
-Customer Details
-Name              : XXXXX XXXXX
-Mobile            : XXXXXXXX90
-Email             : customer@example.com
-Customer ID       : XXXXXXXX
-
-Complaint Details
-Category          : UPI
-Sub Category      : Failed Transaction
-Transaction Date  : 15-09-2026
-Transaction ID    : XXXXXXXXXXXXX
-Amount            : ₹5,000
-Description       : Payment deducted but beneficiary
-                    has not received the amount.
-
-Assignment
-Region            : RO Rohtak
-Branch            : ABC Branch
-Department        : Digital Banking Division
-Assigned To       : User Name
-
-Status            : UNDER PROCESS
-Priority          : HIGH
-Due Date          : 18-09-2026
-
-------------------------------------------------------
-Timeline
-------------------------------------------------------
-15-09-2026  Complaint Registered
-15-09-2026  Assigned to RO
-16-09-2026  Taken up by Branch
-16-09-2026  Response Awaited
-------------------------------------------------------
-```
-
----
-
-# 9. Complaint Assignment
-
-Complaints should be assignable based on:
-
-* Complaint category
+* Category
 * Sub-category
 * Branch
 * Region
@@ -350,15 +541,15 @@ Complaints should be assignable based on:
 * Product
 * Complaint type
 
-Assignment may be:
+Assignment can be:
 
 ### Manual
 
-An authorized user assigns the complaint to a particular office/user.
+Authorized users assign complaints to another user/office.
 
 ### Automatic
 
-The system automatically assigns the complaint based on predefined rules.
+The system assigns complaints using predefined routing rules.
 
 Example:
 
@@ -369,7 +560,10 @@ UPI Complaint
 Digital Banking Division
       │
       ▼
-Concerned RO / Branch
+Concerned RO
+      │
+      ▼
+Concerned Branch
       │
       ▼
 Assigned Officer
@@ -377,11 +571,9 @@ Assigned Officer
 
 ---
 
-# 10. SLA and TAT Monitoring
+# 17. SLA / TAT Monitoring
 
-Each complaint should have a defined **Turnaround Time (TAT)**.
-
-The system should automatically calculate:
+The system should calculate:
 
 * Complaint Age
 * Due Date
@@ -397,29 +589,21 @@ Complaint Received
        ▼
 SLA Clock Starts
        │
-       ├── Within TAT ──► Normal
+       ├── Normal
        │
-       ├── Near Due Date ► Warning
+       ├── SLA Warning
        │
-       └── TAT Exceeded ► Overdue / Escalation
+       └── Overdue
+              │
+              ▼
+          Escalation
 ```
-
-The system should generate alerts for:
-
-* New complaints
-* Pending complaints
-* Complaints approaching SLA
-* Overdue complaints
-* Escalated complaints
-* Complaints awaiting response
 
 ---
 
-# 11. Escalation Management
+# 18. Escalation Management
 
-An escalation mechanism should be incorporated into the portal.
-
-Example:
+Suggested hierarchy:
 
 ```text
 Level 1
@@ -438,53 +622,114 @@ Level 4
 Nodal Officer / Higher Authority
 ```
 
-Escalation rules should be configurable based on:
-
-* Complaint category
-* Severity
-* TAT
-* Amount
-* Customer type
-* Regulatory requirement
+Escalation rules should be configurable.
 
 ---
 
-# 12. Priority
+# 19. Complaint Priority
 
-Complaints may be assigned priority levels:
-
-* Low
-* Medium
-* High
-* Critical
-
-Priority may be determined manually or automatically.
-
-For example:
+Suggested priority levels:
 
 ```text
-Fraud / Suspected Fraud        → Critical
-Financial Loss                 → High
-Digital Transaction Issue     → High
-General Service Complaint     → Medium
-Information Request           → Low
+LOW
+MEDIUM
+HIGH
+CRITICAL
 ```
 
-The exact classification should be configurable as per Bank policy.
+Priority may be determined based on:
+
+* Complaint type
+* Financial impact
+* Fraud/suspected fraud
+* Customer impact
+* Regulatory requirements
+* Business rules
 
 ---
 
-# 13. Communication
+# 20. Complaint Timeline / Audit Trail
 
-The portal should support automated communication through:
+Every significant action must be recorded.
 
-* SMS
-* Email
+Example:
+
+```text
+15-09-2026 10:15 AM
+Complaint Registered
+
+15-09-2026 10:18 AM
+Complaint Assigned
+
+16-09-2026 02:30 PM
+Complaint Viewed
+
+16-09-2026 04:20 PM
+Remark Added
+
+17-09-2026 03:45 PM
+Complaint Resolved
+
+17-09-2026 04:00 PM
+Response Sent
+```
+
+Audit information should include:
+
+```text
+Employee ID
+Employee Name
+Action
+Module
+Record ID
+Timestamp
+IP Address
+Remarks
+```
+
+Employee identity should be obtained from the authenticated IAM context.
+
+---
+
+# 21. Attachments
+
+Supporting documents may be uploaded by customers and authorized Bank officials.
+
+Possible formats:
+
+```text
+PDF
+JPG
+JPEG
+PNG
+XLS
+XLSX
+```
+
+Security controls:
+
+* File size validation
+* File extension validation
+* MIME type validation
+* Malware scanning
+* Secure storage
+* Access control
+* Download authorization
+* Audit logging
+
+---
+
+# 22. Communication
+
+The system may integrate with:
+
+* SMS Gateway
+* Email Gateway
 
 Notifications may be generated for:
 
 1. Complaint registration
-2. Complaint assignment
+2. Assignment
 3. Status change
 4. Additional information required
 5. Resolution
@@ -492,83 +737,11 @@ Notifications may be generated for:
 7. Escalation
 8. Reopening
 
-Example registration message:
-
-```text
-Your complaint has been successfully registered.
-
-Complaint Reference No.: HGB-2026-00001245
-
-Please use the above reference number to track
-the status of your complaint.
-```
-
 ---
 
-# 14. Attachments
+# 23. Search and Filters
 
-Customers and Bank officials should be able to upload supporting documents.
-
-Supported file types may include:
-
-* PDF
-* JPG / JPEG
-* PNG
-* XLS / XLSX
-
-The system should implement:
-
-* File size restrictions
-* File type validation
-* Malware/security scanning
-* Secure storage
-* Access control
-* Download authorization
-* Audit logging
-
-Sensitive documents should not be publicly accessible.
-
----
-
-# 15. Complaint Timeline / Audit Trail
-
-Every action performed on a complaint should be recorded.
-
-Example:
-
-```text
-15-09-2026 10:15 AM
-Complaint Registered
-Source: Bank Website
-
-15-09-2026 10:18 AM
-Complaint Assigned
-To: RO Rohtak
-
-15-09-2026 02:30 PM
-Complaint Viewed
-User: Officer123
-
-16-09-2026 11:20 AM
-Remark Added
-"Transaction details verified."
-
-17-09-2026 03:45 PM
-Complaint Resolved
-
-17-09-2026 04:00 PM
-Response Sent to Customer
-```
-
-Audit records should preferably be immutable for normal users.
-
----
-
-# 16. Search and Filters
-
-The portal should provide comprehensive search functionality.
-
-Search by:
+Search options:
 
 * Complaint Number
 * Customer Name
@@ -582,29 +755,14 @@ Search by:
 * Sub-category
 * Status
 * Priority
-* Assigned User
+* Assigned Employee
 * Date Range
-
-Filters should include:
-
-```text
-Date From
-Date To
-Category
-Status
-Priority
-Region
-Branch
-Department
-Assigned User
-SLA Status
-```
 
 ---
 
-# 17. MIS and Reports
+# 24. MIS and Reports
 
-The system should provide downloadable MIS reports.
+Reports should include:
 
 ### Daily MIS
 
@@ -624,58 +782,38 @@ The system should provide downloadable MIS reports.
 * TAT analysis
 * Resolution analysis
 * Reopened complaints
+* Ageing analysis
 
-Reports should be exportable in:
+Export formats:
 
-* Excel
-* CSV
-* PDF
+```text
+Excel
+CSV
+PDF
+```
 
 ---
 
-# 18. Management Dashboard
+# 25. Management Dashboard
 
-Management should have a consolidated view of complaint performance.
-
-Example:
+Dashboard may contain:
 
 ```text
-                    COMPLAINT MIS
-
-Total Complaints             1,245
-Resolved                     720
-Pending                      312
-Overdue                       27
-Escalated                     41
-
-------------------------------------------------
-
-Category-wise
-
-UPI                          245
-ATM / NFS                    180
-IMPS                         110
-AePS                          85
-BBPS                          62
-Deposits                     150
-Loans                        205
-Other                        208
-
-------------------------------------------------
-
-Region-wise
-
-RO Rohtak                    180
-RO Gurugram                  215
-RO Hisar                     165
-RO Karnal                    190
-...
+Total Complaints
+New Complaints
+Pending Complaints
+Overdue Complaints
+Resolved Complaints
+Closed Complaints
+Escalated Complaints
+Reopened Complaints
 ```
 
-Charts can be provided for:
+Charts:
 
 * Daily complaint trend
 * Category distribution
+* Branch-wise complaints
 * Region-wise complaints
 * TAT performance
 * Pending ageing
@@ -683,309 +821,179 @@ Charts can be provided for:
 
 ---
 
-# 19. Complaint Ageing
+# 26. Security Requirements
 
-The system should provide ageing analysis.
+The application should implement:
 
-Example:
-
-| Age        | Complaints |
-| ---------- | ---------: |
-| 0–2 Days   |        125 |
-| 3–5 Days   |         86 |
-| 6–10 Days  |         54 |
-| 11–20 Days |         29 |
-| >20 Days   |         18 |
-
-This will help management identify long-pending complaints.
-
----
-
-# 20. Security Requirements
-
-Since the application will contain sensitive customer and transaction information, security should be a major consideration.
-
-The system should implement:
-
-* Role-Based Access Control
-* Strong password policy
-* Multi-Factor Authentication for internal users
-* Session timeout
-* Secure password hashing
+* Bank IAM integration
+* ASP.NET Core authentication middleware
+* ASP.NET Core authorization policies
+* Role-based access control
+* Organizational-level access control
 * HTTPS/TLS
 * Input validation
 * SQL injection protection
 * XSS protection
-* CSRF protection
+* CSRF protection where applicable
 * Rate limiting
 * Secure file upload
-* Audit logs
-* Access logs
+* Audit logging
+* Access logging
 * Data encryption where required
 * Database backup
-* Disaster recovery mechanism
+* Disaster recovery
 
-Customer-facing APIs should not expose internal database IDs or sensitive information.
-
----
-
-# 21. Privacy and Data Protection
-
-The system should follow the Bank's applicable security, privacy, record-retention and regulatory requirements.
-
-Important considerations:
-
-* Customer information should only be accessible to authorized users.
-* Account numbers and other sensitive information should be masked wherever possible.
-* Complaint attachments should not be publicly accessible.
-* API responses should contain only required information.
-* Sensitive information should not be written unnecessarily into application logs.
-* User activity should be auditable.
-* Data retention should follow the Bank's approved policy.
+The system must never store Bank employee passwords or authentication credentials.
 
 ---
 
-# 22. Suggested Technology Stack
+# 27. ASP.NET Core API Architecture
 
-For an internal Bank application, the following architecture can be considered:
+The backend should follow a clean and modular architecture.
 
-### Frontend
-
-```text
-Next.js
-React
-TypeScript
-```
-
-### Backend
+Recommended structure:
 
 ```text
-NestJS
-Node.js
-TypeScript
-```
-
-### Database
-
-```text
-PostgreSQL
-```
-
-### Cache / Queue
-
-```text
-Redis
-```
-
-### Deployment
-
-```text
-Docker
-Linux Server
-Nginx
-```
-
-### Authentication
-
-```text
-JWT / Session-based Authentication
-RBAC
-MFA / OTP where required
+ComplaintManagement/
+│
+├── src/
+│   │
+│   ├── ComplaintManagement.Api/
+│   │   ├── Controllers/
+│   │   ├── Middleware/
+│   │   ├── Filters/
+│   │   ├── Extensions/
+│   │   ├── Program.cs
+│   │   └── appsettings.json
+│   │
+│   ├── ComplaintManagement.Application/
+│   │   ├── Complaints/
+│   │   ├── Categories/
+│   │   ├── Assignments/
+│   │   ├── Escalations/
+│   │   ├── Reports/
+│   │   ├── Notifications/
+│   │   └── Common/
+│   │
+│   ├── ComplaintManagement.Domain/
+│   │   ├── Entities/
+│   │   ├── Enums/
+│   │   ├── ValueObjects/
+│   │   └── Interfaces/
+│   │
+│   ├── ComplaintManagement.Infrastructure/
+│   │   ├── Persistence/
+│   │   ├── Repositories/
+│   │   ├── IAM/
+│   │   ├── Notifications/
+│   │   ├── FileStorage/
+│   │   └── Services/
+│   │
+│   └── ComplaintManagement.Contracts/
+│       ├── Requests/
+│       ├── Responses/
+│       └── DTOs/
+│
+└── tests/
+    ├── ComplaintManagement.UnitTests/
+    └── ComplaintManagement.IntegrationTests/
 ```
 
 ---
 
-# 23. High-Level Architecture
+# 28. Layer Responsibilities
 
-```text
-                    CUSTOMER
-                       │
-                       ▼
-              ┌─────────────────┐
-              │  Bank Website   │
-              │ Complaint Form  │
-              └────────┬────────┘
-                       │
-                       ▼
-              ┌─────────────────┐
-              │   API Gateway   │
-              └────────┬────────┘
-                       │
-                       ▼
-              ┌─────────────────┐
-              │ Complaint API   │
-              │    NestJS       │
-              └────────┬────────┘
-                       │
-          ┌────────────┼────────────┐
-          ▼            ▼            ▼
-     PostgreSQL      Redis       File Storage
-          │
-          ▼
- ┌───────────────────────┐
- │ Complaint Management  │
- │       Portal          │
- │      Next.js          │
- └───────────┬───────────┘
-             │
-             ▼
-     Bank Officials
-```
+## API Layer
 
----
+Responsible for:
 
-# 24. Suggested Database Design
+* HTTP requests/responses
+* Controllers
+* Authentication middleware configuration
+* Authorization policies
+* API validation
+* Exception handling
 
-### complaints
+## Application Layer
 
-```text
-id
-complaint_number
-customer_id
-customer_name
-mobile_number
-email
-account_number
-branch_id
-category_id
-subcategory_id
-description
-transaction_id
-transaction_date
-transaction_amount
-priority
-status
-assigned_to
-assigned_department
-assigned_branch
-sla_due_date
-resolved_at
-closed_at
-created_at
-updated_at
-```
+Responsible for:
 
-### complaint_categories
+* Business logic
+* Use cases
+* Complaint workflows
+* SLA calculations
+* Assignment
+* Escalation
+* Notifications
 
-```text
-id
-name
-description
-is_active
-created_at
-updated_at
-```
+## Domain Layer
 
-### complaint_status_history
+Responsible for:
 
-```text
-id
-complaint_id
-old_status
-new_status
-remarks
-changed_by
-changed_at
-```
+* Business entities
+* Domain rules
+* Enums
+* Interfaces
+* Domain-specific logic
 
-### complaint_assignments
+## Infrastructure Layer
 
-```text
-id
-complaint_id
-assigned_from
-assigned_to
-assigned_department
-remarks
-assigned_at
-```
+Responsible for:
 
-### complaint_attachments
+* PostgreSQL
+* Entity Framework Core
+* Repository implementations
+* Bank IAM integration
+* SMS/Email integrations
+* File storage
+* Redis
+* External APIs
 
-```text
-id
-complaint_id
-file_name
-file_path
-file_type
-file_size
-uploaded_by
-uploaded_at
-```
+## Contracts Layer
 
-### complaint_remarks
+Responsible for:
 
-```text
-id
-complaint_id
-remark
-visibility
-created_by
-created_at
-```
-
-### users
-
-```text
-id
-employee_id
-name
-email
-mobile
-password_hash
-role_id
-branch_id
-region_id
-department_id
-is_active
-created_at
-updated_at
-```
-
-### audit_logs
-
-```text
-id
-user_id
-action
-module
-record_id
-ip_address
-user_agent
-created_at
-```
+* Request DTOs
+* Response DTOs
+* API contracts
 
 ---
 
-# 25. API Structure
-
-Suggested API structure:
+# 29. Suggested API Structure
 
 ```text
-/api/v1/auth
 /api/v1/complaints
-/api/v1/complaints/:id
-/api/v1/complaints/:id/status
-/api/v1/complaints/:id/assign
-/api/v1/complaints/:id/remarks
-/api/v1/complaints/:id/attachments
-/api/v1/complaints/:id/history
+/api/v1/complaints/{id}
+/api/v1/complaints/{id}/status
+/api/v1/complaints/{id}/assign
+/api/v1/complaints/{id}/remarks
+/api/v1/complaints/{id}/attachments
+/api/v1/complaints/{id}/history
+
 /api/v1/categories
+/api/v1/subcategories
+
 /api/v1/branches
 /api/v1/regions
-/api/v1/users
+/api/v1/departments
+
 /api/v1/reports
 /api/v1/dashboard
+
+/api/v1/notifications
 ```
+
+There should be **no local `/auth/login` endpoint** for Bank employees if authentication is performed by the Bank's existing IAM.
 
 ---
 
-# 26. Customer Complaint API
+# 30. Example Complaint API
 
-Example:
+### Create Complaint
 
 ```http
 POST /api/v1/complaints
+Content-Type: application/json
 ```
 
 Request:
@@ -1017,111 +1025,452 @@ Response:
 
 ---
 
-# 27. Project Structure
+# 31. Example ASP.NET Core Controller
 
-Suggested backend structure:
+Conceptual example:
+
+```csharp
+[ApiController]
+[Route("api/v1/complaints")]
+[Authorize]
+public class ComplaintsController : ControllerBase
+{
+    private readonly IComplaintService _complaintService;
+
+    public ComplaintsController(IComplaintService complaintService)
+    {
+        _complaintService = complaintService;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetComplaints(
+        [FromQuery] ComplaintFilterRequest request)
+    {
+        var result = await _complaintService.GetComplaintsAsync(request);
+
+        return Ok(result);
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetComplaint(Guid id)
+    {
+        var result = await _complaintService.GetComplaintAsync(id);
+
+        return Ok(result);
+    }
+}
+```
+
+Authorization policies can then be applied to specific operations.
+
+Example:
+
+```csharp
+[Authorize(Policy = "Complaint.Assign")]
+[HttpPost("{id:guid}/assign")]
+public async Task<IActionResult> AssignComplaint(
+    Guid id,
+    AssignComplaintRequest request)
+{
+    // Assignment logic
+    return Ok();
+}
+```
+
+---
+
+# 32. IAM Integration
+
+The Bank IAM integration should be isolated inside:
 
 ```text
-complaint-management-backend/
-│
-├── src/
-│   ├── auth/
-│   ├── users/
-│   ├── roles/
-│   ├── complaints/
-│   ├── categories/
-│   ├── assignments/
-│   ├── attachments/
-│   ├── notifications/
-│   ├── escalation/
-│   ├── reports/
-│   ├── dashboard/
-│   ├── audit/
-│   ├── database/
-│   ├── common/
-│   └── main.ts
-│
-├── test/
-├── docker/
-├── .env.example
-├── docker-compose.yml
-├── package.json
-└── README.md
+ComplaintManagement.Infrastructure/
+        │
+        └── IAM/
+```
+
+Example:
+
+```text
+IAM/
+├── IamClient.cs
+├── IamUserService.cs
+├── IamTokenValidator.cs
+├── IamModels.cs
+└── IamOptions.cs
+```
+
+The rest of the application should not directly depend on the external IAM API implementation.
+
+Example abstraction:
+
+```csharp
+public interface IIamUserService
+{
+    Task<IamUser?> GetUserAsync(string employeeId);
+}
+```
+
+This allows the Bank's IAM implementation to be changed without affecting the complaint business logic.
+
+---
+
+# 33. Database Design
+
+## complaints
+
+```text
+id
+complaint_number
+customer_id
+customer_name
+mobile_number
+email
+account_number
+branch_id
+category_id
+subcategory_id
+description
+transaction_id
+transaction_date
+transaction_amount
+priority
+status
+assigned_employee_id
+assigned_department
+assigned_branch
+sla_due_date
+resolved_at
+closed_at
+created_at
+updated_at
+```
+
+## complaint_categories
+
+```text
+id
+name
+description
+is_active
+created_at
+updated_at
+```
+
+## complaint_status_history
+
+```text
+id
+complaint_id
+old_status
+new_status
+remarks
+changed_by_employee_id
+changed_at
+```
+
+## complaint_assignments
+
+```text
+id
+complaint_id
+assigned_from_employee_id
+assigned_to_employee_id
+assigned_department
+remarks
+assigned_at
+```
+
+## complaint_attachments
+
+```text
+id
+complaint_id
+file_name
+file_path
+file_type
+file_size
+uploaded_by_employee_id
+uploaded_at
+```
+
+## complaint_remarks
+
+```text
+id
+complaint_id
+remark
+visibility
+created_by_employee_id
+created_at
+```
+
+## audit_logs
+
+```text
+id
+employee_id
+action
+module
+record_id
+ip_address
+user_agent
+created_at
+```
+
+## application_role_mapping
+
+```text
+id
+iam_role
+application_role
+is_active
+created_at
+updated_at
+```
+
+> There is intentionally **no local users table containing passwords or authentication credentials**.
+
+---
+
+# 34. Entity Framework Core
+
+Entity Framework Core will be used for database access.
+
+Recommended approach:
+
+```text
+ASP.NET Core
+      │
+      ▼
+Application Service
+      │
+      ▼
+Repository / DbContext
+      │
+      ▼
+Entity Framework Core
+      │
+      ▼
+PostgreSQL
+```
+
+Database migrations should be maintained as part of source control.
+
+Example:
+
+```bash
+dotnet ef migrations add InitialCreate
+dotnet ef database update
+```
+
+---
+
+# 35. Configuration
+
+Example `appsettings.json`:
+
+```json
+{
+  "ConnectionStrings": {
+    "DefaultConnection": ""
+  },
+
+  "Redis": {
+    "ConnectionString": ""
+  },
+
+  "IAM": {
+    "BaseUrl": "",
+    "Authority": "",
+    "ClientId": "",
+    "ClientSecret": ""
+  },
+
+  "FileStorage": {
+    "BasePath": ""
+  },
+
+  "Notification": {
+    "SmsApiUrl": "",
+    "EmailApiUrl": ""
+  }
+}
+```
+
+Secrets must be provided through secure configuration mechanisms and must not be committed to source control.
+
+---
+
+# 36. Background Processing
+
+Background processing may be implemented using .NET Background Services.
+
+Possible background jobs:
+
+```text
+SLA Monitoring
+Complaint Escalation
+SMS Notifications
+Email Notifications
+Pending Complaint Reminders
+Daily MIS Generation
+Data Cleanup
+```
+
+Example:
+
+```text
+Background Service
+       │
+       ├── Check SLA
+       │
+       ├── Identify Overdue
+       │
+       ├── Escalate
+       │
+       └── Send Notification
+```
+
+Redis may be used for distributed caching or queue-based processing where required.
+
+---
+
+# 37. Logging
+
+ASP.NET Core logging should be used with structured logging.
+
+Logs may contain:
+
+```text
+Request ID
+Employee ID
+Endpoint
+HTTP Method
+Response Status
+Execution Time
+Error Details
+```
+
+The following must not be logged:
+
+```text
+Password
+OTP
+Access Token
+Refresh Token
+Client Secret
+CVV
+Complete Card Number
+Unmasked Sensitive Customer Data
+```
+
+---
+
+# 38. API Documentation
+
+The API should provide OpenAPI/Swagger documentation for development and testing.
+
+Example:
+
+```text
+Swagger / OpenAPI
+        │
+        ▼
+ASP.NET Core Web API
+        │
+        ├── Complaints
+        ├── Categories
+        ├── Assignments
+        ├── Reports
+        └── Dashboard
+```
+
+Swagger should be appropriately restricted or disabled in production according to Bank security policy.
+
+---
+
+# 39. Testing
+
+The project should include:
+
+### Unit Tests
+
+Test:
+
+* Complaint business logic
+* SLA calculation
+* Assignment rules
+* Escalation rules
+* Validation
+* Authorization policies
+
+### Integration Tests
+
+Test:
+
+* PostgreSQL
+* IAM integration
+* API endpoints
+* File storage
+* Notification services
+
+### Security Testing
+
+The application should undergo applicable:
+
+* Vulnerability Assessment
+* VAPT
+* Security review
+* API security testing
+* Dependency/security scanning
+
+---
+
+# 40. Deployment
+
+Recommended deployment architecture:
+
+```text
+                    Internal Network
+                          │
+                          ▼
+                       Nginx
+                          │
+                          ▼
+                ASP.NET Core API
+                     .NET 10
+                          │
+              ┌───────────┼───────────┐
+              ▼           ▼           ▼
+          PostgreSQL    Redis     File Storage
 ```
 
 Frontend:
 
 ```text
-complaint-management-frontend/
-│
-├── app/
-│   ├── login/
-│   ├── dashboard/
-│   ├── complaints/
-│   ├── reports/
-│   ├── users/
-│   ├── categories/
-│   └── settings/
-│
-├── components/
-├── services/
-├── hooks/
-├── lib/
-├── types/
-├── public/
-├── package.json
-└── README.md
+Next.js
+   │
+   ▼
+Internal Web Server / Application Server
 ```
+
+The exact deployment architecture should follow the Bank's infrastructure, network and security requirements.
 
 ---
 
-# 28. Environment Variables
+# 41. Docker
 
-Example `.env`:
+The application should be containerized where permitted.
 
-```env
-NODE_ENV=production
-
-PORT=3000
-
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-DATABASE_NAME=complaint_management
-DATABASE_USER=complaint_user
-DATABASE_PASSWORD=********
-
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-JWT_SECRET=********
-
-FILE_STORAGE_PATH=/data/complaints
-
-SMS_API_URL=
-SMS_API_KEY=
-
-SMTP_HOST=
-SMTP_PORT=
-SMTP_USER=
-SMTP_PASSWORD=
-```
-
-Actual credentials must never be committed to Git.
-
----
-
-# 29. Docker
-
-The application should preferably be containerized.
-
-Example services:
+Suggested services:
 
 ```text
-Frontend
-Backend
-PostgreSQL
-Redis
-Nginx
+frontend
+backend
+postgres
+redis
+nginx
 ```
 
 Example:
@@ -1129,8 +1478,8 @@ Example:
 ```text
 docker-compose
 │
-├── frontend
-├── backend
+├── complaint-frontend
+├── complaint-api
 ├── postgres
 ├── redis
 └── nginx
@@ -1138,101 +1487,27 @@ docker-compose
 
 ---
 
-# 30. Logging
-
-The application should maintain structured application logs.
-
-Logs should capture:
-
-* Request ID
-* User ID
-* API endpoint
-* HTTP method
-* Response status
-* Execution time
-* Error details
-
-However, sensitive customer information such as:
-
-* Full account number
-* OTP
-* Password
-* Card number
-* CVV
-* Authentication credentials
-
-should not be logged.
-
----
-
-# 31. Backup and Recovery
+# 42. Backup and Recovery
 
 The system should have:
 
-* Regular PostgreSQL database backups
+* Regular PostgreSQL backups
+* Attachment backups
 * Backup verification
-* Attachment backup
-* Backup retention policy
+* Backup retention
 * Disaster Recovery procedure
 * Restore testing
 
-The backup strategy should be aligned with the Bank's approved IT/DR policy.
+The backup and DR design should follow the Bank's approved IT/DR policy.
 
 ---
 
-# 32. Notifications
+# 43. Development Roadmap
 
-A notification engine should be designed as a separate module.
+## Phase 1 — Core Complaint Management
 
-Example:
-
-```text
-Complaint Event
-      │
-      ▼
-Notification Service
-      │
-      ├── SMS
-      │
-      ├── Email
-      │
-      └── Portal Notification
-```
-
-This will allow additional notification channels to be added later without modifying the complaint module.
-
----
-
-# 33. Future Enhancements
-
-Possible future enhancements include:
-
-* AI-assisted complaint categorisation
-* Automatic complaint routing
-* Duplicate complaint detection
-* OCR for uploaded documents
-* Customer feedback/rating
-* Advanced SLA analytics
-* Regulatory complaint reporting
-* Integration with CBS
-* Integration with Digital Banking systems
-* Integration with CRM
-* Integration with SMS Gateway
-* Integration with Email Gateway
-* API-based integration with Bank website
-* Mobile application
-* Knowledge base / FAQ
-* Automated response suggestions
-
----
-
-# 34. Development Roadmap
-
-### Phase 1 — Core Complaint Management
-
-* User authentication
-* RBAC
-* Complaint registration
+* Bank IAM integration
+* Customer complaint registration
 * Complaint number generation
 * Complaint listing
 * Complaint details
@@ -1241,7 +1516,7 @@ Possible future enhancements include:
 * Remarks
 * Basic dashboard
 
-### Phase 2 — Monitoring
+## Phase 2 — Monitoring
 
 * SLA/TAT
 * Escalation
@@ -1251,7 +1526,7 @@ Possible future enhancements include:
 * MIS reports
 * Excel/CSV export
 
-### Phase 3 — Integration
+## Phase 3 — Integration
 
 * Bank website integration
 * SMS gateway
@@ -1259,53 +1534,63 @@ Possible future enhancements include:
 * Transaction verification
 * CBS / Digital Banking integrations
 
-### Phase 4 — Advanced Features
+## Phase 4 — Advanced Features
 
 * Automated routing
-* AI categorisation
-* Duplicate detection
+* AI-assisted categorisation
+* Duplicate complaint detection
 * Advanced analytics
 * Management dashboards
 
 ---
 
-# 35. Key Design Principles
+# 44. Key Design Principles
 
-The application should follow these principles:
+1. **Centralized Authentication**
+   Employee authentication will be performed by the Bank's existing User Management / IAM system.
 
-1. **Security First**
+2. **No Local Password Management**
+   The Complaint Portal will not maintain employee passwords or authentication credentials.
+
+3. **ASP.NET Core Authorization**
+   API authorization will use ASP.NET Core authentication schemes, claims and authorization policies.
+
+4. **Role-Based Access**
+   Access will be based on roles/claims supplied by the Bank IAM and application-level authorization rules.
+
+5. **Organizational Access Control**
+   Complaint visibility will respect the Bank's HO/RO/Branch hierarchy.
+
+6. **Security First**
    Customer and transaction information must be protected.
 
-2. **Role-Based Access**
-   Users should only see complaints relevant to their responsibilities.
+7. **Complete Auditability**
+   Important actions must be recorded against the authenticated employee identity.
 
-3. **Complete Auditability**
-   Every important action should be recorded.
-
-4. **Configurable Workflow**
+8. **Configurable Workflow**
    Categories, SLA, escalation and assignment rules should be configurable.
 
-5. **Scalability**
-   The architecture should support increasing complaint volumes and users.
+9. **API-First Architecture**
+   The Bank website, internal portal, IAM and future Bank systems should communicate through secure APIs.
 
-6. **Maintainability**
-   Backend modules should remain independent and loosely coupled.
+10. **Separation of Concerns**
+    IAM handles identity and authentication; the Complaint Portal handles complaint processing and application authorization.
 
-7. **API-First Architecture**
-   Customer website and internal portal should communicate through secure APIs.
+11. **Scalability**
+    The application should support increasing complaint volumes and users.
 
-8. **No Direct Database Access from Frontend**
-   All application operations should pass through authorized backend APIs.
+12. **Maintainability**
+    The backend should follow a clean, modular architecture with clear separation between API, application, domain and infrastructure layers.
 
 ---
 
-# 36. Success Criteria
+# 45. Success Criteria
 
-The portal will be considered operationally successful when it provides:
+The portal will provide:
 
 * Centralized complaint repository
 * Unique complaint identification
-* Real-time complaint tracking
+* Customer complaint tracking
 * Controlled assignment and reassignment
 * SLA/TAT monitoring
 * Automated escalation
@@ -1315,14 +1600,44 @@ The portal will be considered operationally successful when it provides:
 * Secure document management
 * Customer status tracking
 * Role-based access
+* Integration with Bank's existing User Management / IAM
+* No local employee password/authentication database
+* Secure ASP.NET Core Web API
 * Reliable backup and recovery
 
 ---
 
-# 37. Conclusion
+# 46. Conclusion
 
-The **Bank Complaint Management Portal** will provide a centralized and structured platform for managing customer complaints from registration to final resolution.
+The **Bank Complaint Management Portal** will provide a centralized platform for managing customer complaints from registration through final resolution.
 
-The proposed architecture separates the **customer-facing complaint submission system** from the **internal complaint management portal**, while using a common secure backend. This approach will allow the Bank to integrate the portal with its existing website and gradually introduce integrations with CBS, digital banking platforms, notification systems and other internal applications.
+The application will use:
 
-The system should be developed with particular emphasis on **security, auditability, SLA monitoring, role-based access, data confidentiality and management visibility**.
+```text
+Frontend       → Next.js / React / TypeScript
+Backend        → .NET 10 LTS / C# / ASP.NET Core
+Database       → PostgreSQL
+Cache/Queue    → Redis
+Container      → Docker
+Authentication → Bank User Management / IAM
+```
+
+The application will maintain a clear separation between **identity management** and **complaint management**.
+
+The Bank's existing User Management / IAM system will remain the source of truth for employee identity and authentication. The ASP.NET Core backend will consume the authenticated identity and relevant claims and enforce complaint-specific authorization through ASP.NET Core authorization policies.
+
+The Complaint Portal will therefore focus on:
+
+* Complaint registration
+* Complaint categorisation
+* Assignment
+* Investigation
+* Resolution
+* SLA/TAT monitoring
+* Escalation
+* Customer communication
+* Audit trail
+* MIS
+* Management monitoring
+
+This architecture avoids duplication of the Bank's existing authentication infrastructure while providing a secure, modular and maintainable platform for centralized complaint management.
